@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""
+Hi! This is a short script to fetch the currently viewed URL's Outline.com version, which makes it
+more readable. The script doesn't redirect you to outline.com, but rather uses their API to fetch a
+clean version of the article, saves the HTML locally (with some style touchups) and opens it in
+Qutebrowser.
+
+After placing it in ~/.local/share/qutebrowser/userscripts, you can use it with the following
+command in Qutebrowser:
+    :spawn --userscript outline
+
+You can also define an alias like this:
+    :config-dict-add aliases outline "spawn --userscript outline"
+
+Now you can use it by just calling:
+    :outline
+"""
+
+from urllib.request import urlopen
+import json
+import tempfile
+from string import Template
+import os
+
+html_template = Template("""
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>$title</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+     body {
+         margin: 0 auto;
+         font-family: "Helvetica", "Arial", sans-serif;
+         max-width: 40em;
+         font-size: larger;
+         line-height: 1.5;
+         padding: 4em 1em;
+         color: #555;
+     }
+
+     h1,
+     h2,
+     strong {
+         color: #333;
+     }
+
+     h2 {
+         margin-top: 1em;
+         padding-top: 1em;
+     }
+    </style>
+</head>
+<body>
+    $body
+</body>
+</html>
+""")
+
+api_url_template = "https://api.outline.com/v3/parse_article?source_url={}"
+
+article = os.getenv("QUTE_URL")
+
+def qute_command(cmd):
+    with open(os.environ['QUTE_FIFO'], 'w') as fifo:
+        fifo.write(cmd)
+        fifo.write('\n')
+        fifo.flush()
+
+qute_command(":message-info 'Fetching a readable version from outline...'")
+resp = json.load(urlopen(api_url_template.format(article)))["data"]
+title = resp["title"]
+body = resp["html"]
+
+with tempfile.NamedTemporaryFile('w+t', delete=False, suffix=".html") as f:
+    f.write(html_template.substitute(title=title, body=body))
+    qute_command(":open " + f.name)
